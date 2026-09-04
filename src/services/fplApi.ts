@@ -13,8 +13,8 @@ import type {
 import { SAMPLE_MANAGERS, MOCK_BOOTSTRAP, MOCK_FIXTURES } from '../data/mockData';
 import { findLatestTeamNewsForPlayer } from '../data/teamNewsData';
 
-const CACHE_PREFIX = 'fpl_cache_';
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 mins
+const CACHE_PREFIX = 'fpl_live_2026_v3_';
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 mins
 
 function getCached<T>(key: string): T | null {
   try {
@@ -113,14 +113,14 @@ export async function getManagerInfo(teamId: number): Promise<ManagerInfo> {
       player_first_name: 'FPL',
       player_last_name: 'Manager',
       name: `Team #${teamId}`,
-      summary_overall_points: 1240,
-      summary_overall_rank: 45210,
-      summary_event_points: 68,
-      summary_event_rank: 128900,
-      current_event: 22,
+      summary_overall_points: 148,
+      summary_overall_rank: 24500,
+      summary_event_points: 78,
+      summary_event_rank: 18400,
+      current_event: 3,
       last_deadline_bank: 15,
-      last_deadline_value: 1025,
-      last_deadline_total_transfers: 18
+      last_deadline_value: 1018,
+      last_deadline_total_transfers: 2
     };
   }
 }
@@ -160,15 +160,15 @@ export async function getManagerHistory(teamId: number): Promise<ManagerHistoryR
 
 // Premier League Penalty & Set-piece taker dictionary for analyst models
 const KNOWN_PENALTY_TAKERS = new Set([
-  'Haaland', 'Salah', 'Palmer', 'Saka', 'Fernandes', 'Mbeumo', 'Isak', 
-  'Wood', 'Cunha', 'Mateta', 'Eze', 'Tielemans', 'Watkins', 'Son', 
-  'Solanke', 'Bowen', 'Vardy', 'Delap', 'Armstrong', 'Pedro', 'Calvert-Lewin'
+  'Haaland', 'Palmer', 'B.Fernandes', 'Mbeumo', 'Isak', 'João Pedro', 'Saka', 
+  'Calvert-Lewin', 'Groß', 'Wood', 'Cunha', 'Rogers', 'Cherki', 'Semenyo', 
+  'Watkins', 'Son', 'Solanke', 'Bowen', 'Delap', 'Mateta', 'Eze', 'Pedro'
 ]);
 
 const KNOWN_SET_PIECE_TAKERS = new Set([
-  'Alexander-Arnold', 'Trippier', 'Hall', 'Rice', 'Ødegaard', 'Porro', 
-  'Maddison', 'Gibbs-White', 'Pereira', 'McNeil', 'Digne', 'Gross', 
-  'De Bruyne', 'Foden', 'Eze', 'Palmer', 'Saka', 'Fernandes'
+  'Palmer', 'B.Fernandes', 'Szoboszlai', 'Cherki', 'Semenyo', 'Groß', 'Saka', 
+  'De Cuyper', 'Calafiori', 'Gabriel', 'Gvardiol', 'Rice', 'Ødegaard', 'Porro', 
+  'Maddison', 'Gibbs-White', 'Pereira', 'McNeil', 'Digne'
 ]);
 
 export function buildSquadPlayers(

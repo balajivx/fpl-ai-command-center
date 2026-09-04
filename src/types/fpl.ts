@@ -83,6 +83,7 @@ export interface FPLPlayer {
   cost_change_event: number;
   cost_change_start: number;
   photo?: string;
+  [key: string]: any;
 }
 
 export interface FPLTeam {
@@ -90,13 +91,14 @@ export interface FPLTeam {
   name: string;
   short_name: string;
   code: number;
-  strength: number;
-  strength_overall_home: number;
-  strength_overall_away: number;
-  strength_attack_home: number;
-  strength_attack_away: number;
-  strength_defence_home: number;
-  strength_defence_away: number;
+  strength: number | null;
+  strength_overall_home: number | null;
+  strength_overall_away: number | null;
+  strength_attack_home: number | null;
+  strength_attack_away: number | null;
+  strength_defence_home: number | null;
+  strength_defence_away: number | null;
+  [key: string]: any;
 }
 
 export interface FPLGameweek {
@@ -109,24 +111,34 @@ export interface FPLGameweek {
   finished: boolean;
   average_entry_score: number | null;
   highest_score: number | null;
+  [key: string]: any;
 }
 
 export interface FPLFixture {
   id: number;
+  code?: number;
   event: number | null;
   team_h: number;
   team_a: number;
   team_h_difficulty: number;
   team_a_difficulty: number;
+  team_h_score?: number | null;
+  team_a_score?: number | null;
   finished: boolean;
-  started: boolean;
+  finished_provisional?: boolean;
+  started?: boolean;
+  minutes?: number;
+  provisional_start_time?: boolean;
   kickoff_time: string;
+  pulse_id?: number;
+  stats?: any[];
 }
 
 export interface FPLBootstrap {
   elements: FPLPlayer[];
   teams: FPLTeam[];
   events: FPLGameweek[];
+  [key: string]: any;
 }
 
 export interface ManagerPick {
