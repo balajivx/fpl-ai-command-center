@@ -340,3 +340,32 @@ export interface CaptaincyRank {
   harryVerdict: string;
   tomVerdict: string;
 }
+
+export interface ManagerTransfer {
+  element_in: number;
+  element_in_cost: number;
+  element_out: number;
+  element_out_cost: number;
+  entry: number;
+  event: number;
+  time: string;
+}
+
+export type LiveSyncStatus = 'idle' | 'loading' | 'success' | 'error';
+
+export interface LiveTeamProfile {
+  id: number;
+  teamName: string;
+  managerName: string;
+  overallRank: number;
+  overallPoints: number;
+  gameweekPoints: number;
+  bank: number; // in £m, e.g. 1.5
+  teamValue: number; // in £m, e.g. 101.2
+  freeTransfers: number; // 1-5
+  activeChip: string | null;
+  usedChips: Array<'wildcard' | 'freehit' | '3xc' | 'bboost' | string>;
+  lastSyncedAt?: string;
+  source: 'live_api' | 'cached' | 'preset';
+}
+

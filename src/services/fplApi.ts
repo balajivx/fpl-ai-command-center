@@ -4,6 +4,8 @@ import type {
   ManagerInfo,
   ManagerPicksResponse,
   ManagerHistoryResponse,
+  ManagerTransfer,
+  LiveTeamProfile,
   FPLPlayer,
   FPLTeam,
   SquadPlayer,
@@ -14,6 +16,8 @@ import { SAMPLE_MANAGERS, MOCK_BOOTSTRAP, MOCK_FIXTURES } from '../data/mockData
 import { findLatestTeamNewsForPlayer } from '../data/teamNewsData';
 
 const CACHE_PREFIX = 'fpl_live_2026_v3_';
+const STORED_ID_KEY = 'fpl_active_team_id';
+const RECENT_IDS_KEY = 'fpl_recent_team_ids';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 mins
 
 function getCached<T>(key: string): T | null {
@@ -46,25 +50,35 @@ async function fetchWithFallback<T>(endpoint: string): Promise<T> {
   const urls = [
     `/api/fpl${endpoint}`,
     `https://corsproxy.io/?url=${encodeURIComponent(`https://fantasy.premierleague.com/api${endpoint}`)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://fantasy.premierleague.com/api${endpoint}`)}`
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://fantasy.premierleague.com/api${endpoint}`)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`https://fantasy.premierleague.com/api${endpoint}`)}`
   ];
 
   let lastError: any = null;
   for (const url of urls) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout per proxy
+
       const res = await fetch(url, {
+        signal: controller.signal,
         headers: {
           'Accept': 'application/json'
         }
       });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
-        return (await res.json()) as T;
+        const text = await res.text();
+        if (text && text.trim().startsWith('{') || text.trim().startsWith('[')) {
+          return JSON.parse(text) as T;
+        }
       }
     } catch (err) {
       lastError = err;
     }
   }
-  throw lastError || new Error(`Failed to fetch ${endpoint}`);
+  throw lastError || new Error(`Failed to fetch ${endpoint} across all proxy gateways`);
 }
 
 export async function getBootstrapData(): Promise<FPLBootstrap> {
@@ -157,6 +171,136 @@ export async function getManagerHistory(teamId: number): Promise<ManagerHistoryR
     return SAMPLE_MANAGERS[0].history;
   }
 }
+
+export function getStoredTeamId(): number {
+  try {
+    const val = localStorage.getItem(STORED_ID_KEY);
+    return val ? parseInt(val, 10) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export function setStoredTeamId(teamId: number): void {
+  try {
+    localStorage.setItem(STORED_ID_KEY, teamId.toString());
+  } catch (e) {
+    console.warn('Could not save team ID to localStorage', e);
+  }
+}
+
+export function getRecentTeamIds(): number[] {
+  try {
+    const raw = localStorage.getItem(RECENT_IDS_KEY);
+    return raw ? JSON.parse(raw) : [1, 482, 1000];
+  } catch {
+    return [1, 482, 1000];
+  }
+}
+
+export function addRecentTeamId(teamId: number): void {
+  try {
+    const current = getRecentTeamIds().filter(id => id !== teamId);
+    const updated = [teamId, ...current].slice(0, 6);
+    localStorage.setItem(RECENT_IDS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Could not save recent team IDs', e);
+  }
+}
+
+export async function getManagerTransfers(teamId: number): Promise<ManagerTransfer[]> {
+  const cacheKey = `manager_transfers_${teamId}`;
+  const cached = getCached<ManagerTransfer[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const data = await fetchWithFallback<ManagerTransfer[]>(`/entry/${teamId}/transfers/`);
+    setCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.warn(`Manager transfers fetch failed for ${teamId}:`, err);
+    return [];
+  }
+}
+
+export interface FullLiveSyncResult {
+  profile: LiveTeamProfile;
+  picksResponse: ManagerPicksResponse;
+  historyResponse: ManagerHistoryResponse;
+  squad: SquadPlayer[];
+}
+
+export async function fetchFullLiveManagerSync(
+  teamId: number,
+  fallbackGW: number,
+  bootstrap: FPLBootstrap,
+  fixtures: FPLFixture[]
+): Promise<FullLiveSyncResult> {
+  const info = await getManagerInfo(teamId);
+  const currentEvent = info.current_event || fallbackGW || 3;
+  const picksResponse = await getManagerPicks(teamId, currentEvent);
+  const historyResponse = await getManagerHistory(teamId);
+
+  const usedChips: string[] = [];
+  if (historyResponse.chips && Array.isArray(historyResponse.chips)) {
+    historyResponse.chips.forEach(c => {
+      if (c.name && !usedChips.includes(c.name)) usedChips.push(c.name);
+    });
+  }
+  if (picksResponse.active_chip && !usedChips.includes(picksResponse.active_chip)) {
+    usedChips.push(picksResponse.active_chip);
+  }
+
+  let freeTransfers = 1;
+  if (historyResponse.current && historyResponse.current.length > 0) {
+    const latestEvent = historyResponse.current[historyResponse.current.length - 1];
+    if (latestEvent && latestEvent.event_transfers === 0) {
+      freeTransfers = Math.min(5, 2);
+    } else {
+      freeTransfers = 1;
+    }
+  }
+
+  const rawBank = picksResponse.entry_history?.bank ?? info.last_deadline_bank ?? 10;
+  const rawValue = picksResponse.entry_history?.value ?? info.last_deadline_value ?? 1000;
+  const bankInMillions = Number((rawBank / 10).toFixed(1));
+  const valueInMillions = Number((rawValue / 10).toFixed(1));
+
+  const squad = buildSquadPlayers(
+    picksResponse.picks,
+    bootstrap.elements,
+    bootstrap.teams,
+    fixtures,
+    currentEvent
+  );
+
+  const profile: LiveTeamProfile = {
+    id: teamId,
+    teamName: info.name || `Team #${teamId}`,
+    managerName: `${info.player_first_name || 'Manager'} ${info.player_last_name || ''}`.trim(),
+    overallRank: picksResponse.entry_history?.overall_rank ?? info.summary_overall_rank ?? 1,
+    overallPoints: picksResponse.entry_history?.total_points ?? info.summary_overall_points ?? 0,
+    gameweekPoints: picksResponse.entry_history?.points ?? info.summary_event_points ?? 0,
+    bank: bankInMillions,
+    teamValue: valueInMillions,
+    freeTransfers,
+    activeChip: picksResponse.active_chip,
+    usedChips,
+    lastSyncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    source: 'live_api'
+  };
+
+  addRecentTeamId(teamId);
+  setStoredTeamId(teamId);
+
+  return {
+    profile,
+    picksResponse,
+    historyResponse,
+    squad
+  };
+}
+
 
 // Premier League Penalty & Set-piece taker dictionary for analyst models
 const KNOWN_PENALTY_TAKERS = new Set([
